@@ -88,16 +88,43 @@ local devinitsts_inits = {
   [2] = "UPDATE",
 }
 
+local devtypes = {
+  [1] = "RF Transceiver",
+  [10] = "IP Peripheral",
+}
+
+local devinitsts_attrs = {
+  [0] = "Device Family",
+  [2] = "Display",
+  [3] = "Speaker",
+  [4] = "RF Band",
+  [5] = "GPIO",
+  [7] = "Radio Type",
+  [9] = "Keypad",
+  [13] = "Channel Knob",
+  [14] = "Virtual Personality",
+  [17] = "Bluetooth",
+  [19] = "Accelerometer",
+  [20] = "GPS",
+}
+
 local f_opcode = ProtoField.uint16("xcmp.opcode", "Opcode", base.HEX, opcodes)
 local f_address_type = ProtoField.uint8("xcmp.address.type", "Type", base.DEC, address_types)
 local f_address_mototrbo = ProtoField.bytes("xcmp.address.mototrbo", "MotoTRBO ID")
 local f_rstatus_result = ProtoField.uint8("xcmp.rstatus.result", "Result", base.DEC, results)
 local f_rstatus_condition = ProtoField.uint8("xcmp.rstatus.condition", "Condition", base.DEC)
 local f_rstatus_status = ProtoField.bytes("xcmp.rstatus.status", "Status")
-local f_devinitsts_major = ProtoField.uint8("xcmp.devinists.major", "Major Version", base.DEC)
-local f_devinitsts_minor = ProtoField.uint8("xcmp.devinists.minor", "Minor Version", base.DEC)
-local f_devinitsts_product = ProtoField.uint8("xcmp.devinists.product", "Product ID", base.DEC)
-local f_devinitsts_init = ProtoField.uint8("xcmp.devinists.init", "Initialization", base.DEC, devinitsts_inits)
+local f_devinitsts_major = ProtoField.uint8("xcmp.devinitsts.major", "Major Version", base.DEC)
+local f_devinitsts_minor = ProtoField.uint8("xcmp.devinitsts.minor", "Minor Version", base.DEC)
+local f_devinitsts_patch = ProtoField.uint8("xcmp.devinitsts.patch", "Patch Version", base.DEC)
+local f_devinitsts_product = ProtoField.uint8("xcmp.devinitsts.product", "Product ID", base.DEC)
+local f_devinitsts_init = ProtoField.uint8("xcmp.devinitsts.init", "Initialization", base.DEC, devinitsts_inits)
+local f_devinitsts_type = ProtoField.uint8("xcmp.devinitsts.type", "Type", base.DEC, devtypes)
+local f_devinitsts_status = ProtoField.uint16("xcmp.devinitsts.status", "Status", base.DEC)
+local f_devinitsts_attrlen = ProtoField.uint8("xcmp.devinitsts.status", "Attribute Length", base.DEC)
+local f_devinitsts_attr = ProtoField.bytes("xcmp.devinitsts.attr", "Attribute")
+local f_devinitsts_attr_key = ProtoField.uint8("xcmp.devinitsts.attr.key", "Key", base.HEX, devinitsts_attrs)
+local f_devinitsts_attr_value = ProtoField.uint8("xcmp.devinitsts.attr.value", "Value", base.HEX)
 local f_rrctrl_feature = ProtoField.uint8("xcmp.rrctrl.feature", "Feature", base.DEC)
 local f_rrctrl_operation = ProtoField.uint8("xcmp.rrctrl.operation", "Operation", base.DEC)
 local f_rrctrl_status = ProtoField.uint8("xcmp.rrctrl.status", "Status", base.DEC)
@@ -120,8 +147,15 @@ proto.fields = {
   f_rstatus_status,
   f_devinitsts_major,
   f_devinitsts_minor,
+  f_devinitsts_patch,
   f_devinitsts_product,
   f_devinitsts_init,
+  f_devinitsts_type,
+  f_devinitsts_status,
+  f_devinitsts_attrlen,
+  f_devinitsts_attr,
+  f_devinitsts_attr_key,
+  f_devinitsts_attr_value,
   f_rrctrl_feature,
   f_rrctrl_operation,
   f_rrctrl_status,
@@ -188,10 +222,27 @@ function proto.dissector(buf, pkt, root)
   elseif opcode == 0xb400 then
     tree:add(f_devinitsts_major, buf(2, 1))
     tree:add(f_devinitsts_minor, buf(3, 1))
+    tree:add(f_devinitsts_patch, buf(4, 1))
     tree:add(f_devinitsts_product, buf(5, 1))
-    local devinists_init = buf(6, 1):uint()
+    local devinitsts_init = buf(6, 1):uint()
     tree:add(f_devinitsts_init, buf(6, 1))
-    desc = desc .. " Init=" .. (devinitsts_inits[devinists_init] or devinists_init)
+    desc = desc .. " Init=" .. (devinitsts_inits[devinitsts_init] or devinitsts_init)
+    if devinitsts_init ~= 1 then
+      tree:add(f_devinitsts_type, buf(7, 1))
+      tree:add(f_devinitsts_status, buf(8, 2))
+      local attrlen = buf(10, 1):uint()
+      tree:add(f_devinitsts_attrlen, buf(10, 1))
+      for i = 0, (attrlen - 1), 2 do
+        local attr_tree = tree:add(f_devinitsts_attr, buf(11 + i, 2))
+        local attr_key = buf(11 + i, 1):uint()
+        attr_tree:add(f_devinitsts_attr_key, buf(11 + i, 1))
+        local attr_value = buf(11 + i + 1, 1):uint()
+        attr_tree:add(f_devinitsts_attr_value, buf(11 + i + 1, 1))
+        if devinitsts_attrs[attr_key] then
+          attr_tree:set_text(string.format("%s: 0x%02x", devinitsts_attrs[attr_key], attr_value))
+        end
+      end
+    end
   elseif opcode == 0x041c or opcode == 0xb41c then
     tree:add(f_rrctrl_feature, buf(2, 1))
     tree:add(opcode == 0x041c and f_rrctrl_operation or f_rrctrl_status, buf(3, 1))
