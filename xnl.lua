@@ -2,20 +2,7 @@ local proto = Proto("xnl", "Motorola XNL")
 
 local port = 8002
 
-local f_len = ProtoField.uint16("xnl.len", "Total Length", base.DEC)
-local f_opcode = ProtoField.uint16("xnl.opcode", "Opcode", base.DEC)
-local f_proto = ProtoField.uint8("xnl.proto", "Protocol", base.DEC)
-local f_flags = ProtoField.uint8("xnl.flags", "Flags", base.HEX)
-local f_dst = ProtoField.uint16("xnl.dst", "Destination", base.HEX)
-local f_src = ProtoField.uint16("xnl.src", "Source", base.HEX)
-local f_transaction = ProtoField.uint16("xnl.transaction", "Transaction ID", base.DEC)
-local f_payload_len = ProtoField.uint16("xnl.payload_len", "Payload Length", base.DEC)
-
-local protos = DissectorTable.new("xnl.proto", "XNL Protocol", ftypes.UINT8)
-
-proto.fields = { f_len, f_opcode, f_proto, f_flags, f_dst, f_src, f_transaction, f_payload_len }
-
-opcodes = {
+local opcodes = {
   [2] = "MASTER_STATUS_BRDCST",
   [3] = "DEV_MASTER_QUERY",
   [4] = "DEV_AUTH_KEY_REQUEST",
@@ -28,6 +15,19 @@ opcodes = {
   [12] = "DATA_MSG_ACK",
 }
 
+local f_len = ProtoField.uint16("xnl.len", "Total Length", base.DEC)
+local f_opcode = ProtoField.uint16("xnl.opcode", "Opcode", base.DEC, opcodes)
+local f_proto = ProtoField.uint8("xnl.proto", "Protocol", base.DEC)
+local f_flags = ProtoField.uint8("xnl.flags", "Flags", base.HEX)
+local f_dst = ProtoField.uint16("xnl.dst", "Destination", base.HEX)
+local f_src = ProtoField.uint16("xnl.src", "Source", base.HEX)
+local f_transaction = ProtoField.uint16("xnl.transaction", "Transaction ID", base.DEC)
+local f_payload_len = ProtoField.uint16("xnl.payload_len", "Payload Length", base.DEC)
+
+local protos = DissectorTable.new("xnl.proto", "XNL Protocol", ftypes.UINT8)
+
+proto.fields = { f_len, f_opcode, f_proto, f_flags, f_dst, f_src, f_transaction, f_payload_len }
+
 function proto.init()
   DissectorTable.get("tcp.port"):add(port, proto)
 end
@@ -38,10 +38,7 @@ function proto.dissector(buf, pkt, root)
   local tree = root:add(proto, buf(0, proto_num ~= 0 and 14 or len))
   tree:add(f_len, buf(0, 2), len)
   local opcode = buf(2, 2):uint()
-  local opcode_tree = tree:add(f_opcode, buf(2, 2), opcode)
-  if opcodes[opcode] then
-    opcode_tree:append_text(" (".. opcodes[opcode] .. ")")
-  end
+  tree:add(f_opcode, buf(2, 2))
   tree:add(f_proto, buf(4, 1))
   tree:add(f_flags, buf(5, 1))
   local dst = buf(6, 2):uint()
