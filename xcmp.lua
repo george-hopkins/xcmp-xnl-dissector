@@ -174,23 +174,15 @@ proto.fields = {
 local xnl_opcode = Field.new("xnl.opcode")
 local xnl_transaction = Field.new("xnl.transaction")
 
-local address_sizes = {
-  [0] = 0,
-  [1] = 3,
-  [2] = 4,
-  [5] = 2,
-  [11] = 4,
-}
-
 function dissect_address(root, field, buf)
   local type = buf(0, 1):uint()
-  local size = address_sizes[type]
-  local tree = root:add(field, buf(0, 1 + size))
+  local size = buf(1, 1):uint()
+  local tree = root:add(field, buf(0, 2 + size))
   tree:add(f_address_type, buf(0, 1))
   if type == 1 then
-    tree:add(f_address_mototrbo, buf(1, size))
+    tree:add(f_address_mototrbo, buf(2, size))
   end
-  return buf(1 + size)
+  return buf(2 + size)
 end
 
 function proto.init()
